@@ -146,21 +146,18 @@ async function consturctServer(moduleDefs) {
    * CORS & Preflight request
    */
   app.use((req, res, next) => {
-    // 始终设置 CORS 头（移除外层 if 条件）
-    res.set({
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Allow-Origin': CORS_ALLOW_ORIGIN || req.headers.origin || '*',
+    if (req.path !== '/' && !req.path.includes('.')) {
+      res.set({
+        'Access-Control-Allow-Credentials': true,
+        'Access-Control-Allow-Origin':
+          CORS_ALLOW_ORIGIN || req.headers.origin || '*',
         'Access-Control-Allow-Headers': 'X-Requested-With,Content-Type',
         'Access-Control-Allow-Methods': 'PUT,POST,GET,DELETE,OPTIONS',
         'Content-Type': 'application/json; charset=utf-8',
-    })
-    
-    // OPTIONS 预检请求直接返回 200
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end()
+      })
     }
-    next()
-})
+    req.method === 'OPTIONS' ? res.status(204).end() : next()
+  })
 
   /**
    * Cookie Parser
@@ -346,15 +343,6 @@ async function serveNcmApi(options) {
 
   /** @type {import('express').Express & ExpressExtension} */
   const appExt = app
-appExt.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version')
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200)
-  }
-  next()
-})
   appExt.server = app.listen(port, host, () => {
     console.log(`
    _   _  _____ __  __  
