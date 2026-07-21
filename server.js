@@ -343,6 +343,15 @@ async function serveNcmApi(options) {
 
   /** @type {import('express').Express & ExpressExtension} */
   const appExt = app
+appExt.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version')
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200)
+  }
+  next()
+})
   appExt.server = app.listen(port, host, () => {
     console.log(`
    _   _  _____ __  __  
