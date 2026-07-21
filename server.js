@@ -2,7 +2,6 @@ require('dotenv').config()
 const fs = require('fs')
 const path = require('path')
 const express = require('express')
-const cors = require('cors')
 const request = require('./util/request')
 const packageJSON = require('./package.json')
 const exec = require('child_process').exec
@@ -140,27 +139,35 @@ async function consturctServer(moduleDefs) {
   app.set('trust proxy', true)
 
   /**
-   * CORS - 放在最前面，确保对所有请求生效
-   */
-  app.use(
-    cors({
-      origin: CORS_ALLOW_ORIGIN || '*',
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['X-Requested-With', 'Content-Type', 'Authorization'],
-      credentials: true,
-    })
-  )
-
-  /**
    * Serving static files
    */
   app.use(express.static(path.join(__dirname, 'public')))
+  /**
+   * CORS & Preflight request
+   */
+  app.use((req, res, next) => {
+    // 始终设置 CORS 头（移除外层 if 条件）
+    res.set({
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Origin': CORS_ALLOW_ORIGIN || req.headers.origin || '*',
+        'Access-Control-Allow-Headers': 'X-Requested-With,Content-Type',
+        'Access-Control-Allow-Methods': 'PUT,POST,GET,DELETE,OPTIONS',
+        'Content-Type': 'application/json; charset=utf-8',
+    })
+    
+    // OPTIONS 预检请求直接返回 200
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end()
+    }
+    next()
+})
 
   /**
    * Cookie Parser
    */
   app.use((req, _, next) => {
     req.cookies = {}
+    //;(req.headers.cookie || '').split(/\s*;\s*/).forEach((pair) => { //  Polynomial regular expression //
     ;(req.headers.cookie || '').split(/;\s+|(?<!\s)\s+$/g).forEach((pair) => {
       let crack = pair.indexOf('=')
       if (crack < 1 || crack == pair.length - 1) return
@@ -204,6 +211,8 @@ async function consturctServer(moduleDefs) {
     // Register the route.
     app.use(moduleDef.route, async (req, res) => {
       ;[req.query, req.body].forEach((item) => {
+        // item may be undefined (some environments / middlewares).
+        // Guard access to avoid "Cannot read properties of undefined (reading 'cookie')".
         if (item && typeof item.cookie === 'string') {
           item.cookie = cookieToJson(decode(item.cookie))
         }
@@ -219,6 +228,7 @@ async function consturctServer(moduleDefs) {
 
       try {
         const moduleResponse = await moduleDef.module(query, (...params) => {
+          // 参数注入客户端IP
           const obj = [...params]
           let ip = req.ip
 
@@ -269,6 +279,7 @@ async function consturctServer(moduleDefs) {
         if (!query.noCookie) {
           if (Array.isArray(cookies) && cookies.length > 0) {
             if (req.protocol === 'https') {
+              // Try to fix CORS SameSite Problem
               res.append(
                 'Set-Cookie',
                 cookies.map((cookie) => {
@@ -335,6 +346,15 @@ async function serveNcmApi(options) {
 
   /** @type {import('express').Express & ExpressExtension} */
   const appExt = app
+appExt.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version')
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200)
+  }
+  next()
+})
   appExt.server = app.listen(port, host, () => {
     console.log(`
    _   _  _____ __  __  
