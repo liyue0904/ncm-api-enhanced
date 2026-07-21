@@ -21,7 +21,11 @@ const VERSION_CHECK_RESULT = {
   NOT_LATEST: 0,
   LATEST: 1,
 }
-
+const tokenPath = '/tmp/anonymous_token';
+if (!fs.existsSync(tokenPath)) {
+  fs.writeFileSync(tokenPath, '');
+  console.log('Created /tmp/anonymous_token');
+}
 /**
  * @typedef {{
  *   identifier?: string,
