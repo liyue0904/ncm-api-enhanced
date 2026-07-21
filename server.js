@@ -135,35 +135,45 @@ async function checkVersion() {
  */
 async function consturctServer(moduleDefs) {
   const app = express()
-  const { CORS_ALLOW_ORIGIN } = process.env
+  // 从环境变量读取配置，如果未设置则使用前端域名（请确保此域名正确）
+  const CORS_ALLOW_ORIGIN = process.env.CORS_ALLOW_ORIGIN || 'https://up-date-my-vue3-project.vercel.app'
   app.set('trust proxy', true)
 
   /**
    * Serving static files
    */
   app.use(express.static(path.join(__dirname, 'public')))
+
   /**
-   * CORS & Preflight request
+   * 强化的 CORS 中间件（解决跨域问题的关键）
+   * 务必放在所有路由之前，确保 CORS 头被正确添加
    */
   app.use((req, res, next) => {
-    if (req.path !== '/' && !req.path.includes('.')) {
-        res.set({
-            'Access-Control-Allow-Credentials': true,
-            'Access-Control-Allow-Origin': process.env.CORS_ALLOW_ORIGIN || req.headers.origin || '*',
-            'Access-Control-Allow-Headers': 'X-Requested-With,Content-Type',
-            'Access-Control-Allow-Methods': 'PUT,POST,GET,DELETE,OPTIONS',
-            'Content-Type': 'application/json; charset=utf-8',
-        })
+    // 设置跨域响应头，允许你的前端域名访问
+    res.header('Access-Control-Allow-Origin', CORS_ALLOW_ORIGIN)
+    res.header('Access-Control-Allow-Credentials', 'true')
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie')
+
+    // 如果是预检请求（OPTIONS），直接返回 204 并结束响应
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204)
     }
-    req.method === 'OPTIONS' ? res.status(204).end() : next()
-})
+
+    // 非预检请求则继续交给后续的路由处理
+    next()
+  })
+
+  /**
+   * 注意：已经移除了原来的 CORS & Preflight request 中间件，以避免冲突。
+   * 你原有的 CORS 逻辑已被上述强化的中间件替代。
+   */
 
   /**
    * Cookie Parser
    */
   app.use((req, _, next) => {
     req.cookies = {}
-    //;(req.headers.cookie || '').split(/\s*;\s*/).forEach((pair) => { //  Polynomial regular expression //
     ;(req.headers.cookie || '').split(/;\s+|(?<!\s)\s+$/g).forEach((pair) => {
       let crack = pair.indexOf('=')
       if (crack < 1 || crack == pair.length - 1) return
@@ -207,8 +217,6 @@ async function consturctServer(moduleDefs) {
     // Register the route.
     app.use(moduleDef.route, async (req, res) => {
       ;[req.query, req.body].forEach((item) => {
-        // item may be undefined (some environments / middlewares).
-        // Guard access to avoid "Cannot read properties of undefined (reading 'cookie')".
         if (item && typeof item.cookie === 'string') {
           item.cookie = cookieToJson(decode(item.cookie))
         }
@@ -224,7 +232,6 @@ async function consturctServer(moduleDefs) {
 
       try {
         const moduleResponse = await moduleDef.module(query, (...params) => {
-          // 参数注入客户端IP
           const obj = [...params]
           let ip = req.ip
 
@@ -275,7 +282,6 @@ async function consturctServer(moduleDefs) {
         if (!query.noCookie) {
           if (Array.isArray(cookies) && cookies.length > 0) {
             if (req.protocol === 'https') {
-              // Try to fix CORS SameSite Problem
               res.append(
                 'Set-Cookie',
                 cookies.map((cookie) => {
