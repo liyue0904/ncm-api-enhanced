@@ -146,18 +146,21 @@ async function consturctServer(moduleDefs) {
    * CORS & Preflight request
    */
   app.use((req, res, next) => {
-    if (req.path !== '/' && !req.path.includes('.')) {
-      res.set({
-        'Access-Control-Allow-Credentials': true,
-        'Access-Control-Allow-Origin':
-          CORS_ALLOW_ORIGIN || req.headers.origin || '*',
+    // 始终设置 CORS 头（移除外层 if 条件）
+    res.set({
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Origin': CORS_ALLOW_ORIGIN || req.headers.origin || '*',
         'Access-Control-Allow-Headers': 'X-Requested-With,Content-Type',
         'Access-Control-Allow-Methods': 'PUT,POST,GET,DELETE,OPTIONS',
         'Content-Type': 'application/json; charset=utf-8',
-      })
+    })
+    
+    // OPTIONS 预检请求直接返回 200
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end()
     }
-    req.method === 'OPTIONS' ? res.status(204).end() : next()
-  })
+    next()
+})
 
   /**
    * Cookie Parser
